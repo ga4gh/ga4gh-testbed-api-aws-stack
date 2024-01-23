@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: Cohort demo for GA4GH April Connect 2022
+Description: Template for testbed backend instance and rds connection
 Parameters:
   HostPort:
     Type: String
@@ -37,6 +37,8 @@ Parameters:
   DBUser:
     Type: String
     Default: testbed_writer
+  DBPass:
+    Type: String
   DBSchema:
     Type: String
     Default: public
@@ -52,29 +54,11 @@ Parameters:
   ExecutionRole:
     Type: String
     Default: arn:aws:iam::282236276875:role/ECSFargateExecutionRole-TT
-
+  SecurityGroupId:
+    Type: String
+    Default: sg-036fa481aa113d84d
 
 Resources:
-  WebServerSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Enable HTTP connection
-      GroupName: TestbedSecurityGroup
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort:
-            Ref: ParamContainerPort
-          ToPort:
-            Ref: ParamContainerPort
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 5432
-          ToPort: 5432
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
 
   ALBBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
@@ -86,9 +70,7 @@ Resources:
         - Ref: SubnetC
       Type: application
       SecurityGroups:
-        - Fn::GetAtt:
-            - WebServerSecurityGroup
-            - GroupId
+      - !Ref SecurityGroupId
 
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
@@ -136,9 +118,7 @@ Resources:
         AwsvpcConfiguration:
           AssignPublicIp: ENABLED
           SecurityGroups:
-            - Fn::GetAtt:
-                - WebServerSecurityGroup
-                - GroupId
+          - !Ref SecurityGroupId
           Subnets:
             - Ref: SubnetA
             - Ref: SubnetB
@@ -174,15 +154,15 @@ Resources:
           Environment:
             - Name: SERVERPORT
               Value: !Ref ParamContainerPort
-            - Name: DBHOST
+            - Name: DBHost
               Value: !Ref DBHost
-            - Name: DBPORT
+            - Name: DBPort
               Value: !Ref DBPort
-            - Name: DBNAME
+            - Name: DBName
               Value: !Ref DBName
-            - Name: DBSCHEMA
+            - Name: DBSchema
               Value: !Ref DBSchema
-            - Name: DBUSER
+            - Name: DBUser
               Value: !Ref DBUser
             - Name: DBPass
               Value: '{{resolve:secretsmanager:GA4GHTestbedRDSPassword:SecretString}}'
