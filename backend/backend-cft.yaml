@@ -1,0 +1,195 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Cohort demo for GA4GH April Connect 2022
+Parameters:
+  HostPort:
+    Type: String
+    Default: 4500
+  ParamContainerPort:
+    Type: String
+    Default: 4500
+  ApiImage:
+    Type: String
+    Default: ga4gh/ga4gh-testbed-api:test
+  VpcId:
+    Type: String
+    Default: vpc-0d772394df78b1311
+  SubnetA:
+    Type: String
+    Default: subnet-0be7a1fb3a96191b4
+  SubnetB:
+    Type: String
+    Default: subnet-0c465ec61b98bffac
+  SubnetC:
+    Type: String
+    Default: subnet-07b0e79f4d9bbf9d0
+  DomainName:
+    Type: String
+    Default: testbed.ga4gh.org
+  DBHost:
+    Type: String
+    Default: dev-ga4gh-testbed-database-database-bqdkifegcrpe.c0q4keadjybw.us-east-2.rds.amazonaws.com
+  DBName:
+    Type: String
+    Default: testbed_db
+  DBPort:
+    Type: String
+    Default: 5432
+  DBUser:
+    Type: String
+    Default: testbed_writer
+  DBSchema:
+    Type: String
+    Default: public
+  TestbedLG:
+    Type: String
+    Default: testbed-backend-lg
+  Region:
+    Type: String
+    Default: us-east-2
+  Prefix:
+    Type: String
+    Default: ecs
+  ExecutionRole:
+    Type: String
+    Default: arn:aws:iam::282236276875:role/ECSFargateExecutionRole-TT
+
+
+Resources:
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable HTTP connection
+      GroupName: TestbedSecurityGroup
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort:
+            Ref: ParamContainerPort
+          ToPort:
+            Ref: ParamContainerPort
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+
+  ALBBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: TestbedAlbBalancer
+      Subnets:
+        - Ref: SubnetA
+        - Ref: SubnetB
+        - Ref: SubnetC
+      Type: application
+      SecurityGroups:
+        - Fn::GetAtt:
+            - WebServerSecurityGroup
+            - GroupId
+
+  ALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: TestbedALBTargetGroup
+      VpcId:
+        Ref: VpcId
+      Protocol: HTTP
+      Port:
+        Ref: HostPort
+      HealthCheckEnabled: true
+      HealthCheckPath: /testbeds
+      HealthCheckIntervalSeconds: 120
+      HealthCheckTimeoutSeconds: 90
+      TargetType: ip
+
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - TargetGroupArn:
+            Ref: ALBTargetGroup
+          Type: forward
+      LoadBalancerArn:
+        Ref: ALBBalancer
+      Port:
+        Ref: HostPort
+      Protocol: HTTP
+
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: dev-ga4gh-testbed-cluster
+
+  ECSService:
+    Type: AWS::ECS::Service
+    DependsOn: ALBListener
+    Properties:
+      Cluster:
+        Ref: ECSCluster
+      LaunchType: FARGATE
+      DesiredCount: 1
+      HealthCheckGracePeriodSeconds: 120
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - Fn::GetAtt:
+                - WebServerSecurityGroup
+                - GroupId
+          Subnets:
+            - Ref: SubnetA
+            - Ref: SubnetB
+            - Ref: SubnetC
+      ServiceName: testbed-backend-service
+      TaskDefinition:
+        Ref: ECSTaskDefinition
+      LoadBalancers:
+        - TargetGroupArn:
+            Ref: ALBTargetGroup
+          ContainerName: testbed-container
+          ContainerPort:
+            Ref: ParamContainerPort
+
+  ECSTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Cpu: 512
+      Memory: 1024
+      NetworkMode: awsvpc
+      ExecutionRoleArn: !Ref ExecutionRole
+      RequiresCompatibilities:
+        - FARGATE
+      ContainerDefinitions:
+        - Name: testbed-container
+          Image: !Ref ApiImage
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref TestbedLG
+              awslogs-region: !Ref Region
+              awslogs-stream-prefix: !Ref Prefix
+          Environment:
+            - Name: SERVERPORT
+              Value: !Ref ParamContainerPort
+            - Name: DBHOST
+              Value: !Ref DBHost
+            - Name: DBPORT
+              Value: !Ref DBPort
+            - Name: DBNAME
+              Value: !Ref DBName
+            - Name: DBSCHEMA
+              Value: !Ref DBSchema
+            - Name: DBUSER
+              Value: !Ref DBUser
+            - Name: DBPass
+              Value: '{{resolve:secretsmanager:GA4GHTestbedRDSPassword:SecretString}}'
+            - Name: USESSL
+              Value: 'false'
+          PortMappings:
+            - ContainerPort:
+                Ref: ParamContainerPort
+              HostPort:
+                Ref: HostPort

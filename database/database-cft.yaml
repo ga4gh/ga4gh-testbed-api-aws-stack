@@ -1,0 +1,103 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Template for creating testbed database instance
+
+Parameters:
+  StaticStackName:
+    Type: String
+    Default: dev-ga4gh-testbed-database
+  ParamDBName:
+    Type: String
+    Default: testbed_db
+  ParamUsername:
+    Type: String
+    Default: testbed_writer
+  SubnetA:
+    Type: String
+    Default: subnet-0be7a1fb3a96191b4
+  SubnetB:
+    Type: String
+    Default: subnet-0c465ec61b98bffac
+  SubnetC:
+    Type: String
+    Default: subnet-07b0e79f4d9bbf9d0
+
+Resources:
+
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable HTTP and SSH connection
+      GroupName: TestBedServerSecurityGroup
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          CidrIp: 0.0.0.0/0
+
+  ApiSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: GA4GHTestbedApiSecret
+      Description: Client secret for GA4GH Testbed service
+      GenerateSecretString:
+        ExcludeLowercase: false
+        ExcludeNumbers: false
+        ExcludePunctuation: true
+        ExcludeUppercase: false
+        IncludeSpace: false
+        PasswordLength: 64
+
+  DBPassword:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: GA4GHTestbedRDSPassword
+      Description: Password for testbed_db db instance
+      GenerateSecretString:
+        ExcludeLowercase: false
+        ExcludeNumbers: false
+        ExcludePunctuation: true
+        ExcludeUppercase: false
+        IncludeSpace: false
+        PasswordLength: 64
+
+  Database:
+    Type: AWS::RDS::DBInstance
+    DependsOn:
+      - DBPassword
+    Properties:
+      DBName: !Ref ParamDBName
+      DBInstanceClass: db.t3.micro
+      Engine: postgres
+      AllocatedStorage: "10"
+      BackupRetentionPeriod: 7
+      DeleteAutomatedBackups: false
+      PubliclyAccessible: true
+      MasterUsername: !Ref ParamUsername
+      MasterUserPassword: '{{resolve:secretsmanager:GA4GHTestbedRDSPassword:SecretString}}'
+      VPCSecurityGroups:
+        - !GetAtt WebServerSecurityGroup.GroupId
+
+Outputs:
+  WebServerSGId:
+    Description: GroupId of the WebServer Security Group
+    Value: !GetAtt WebServerSecurityGroup.GroupId
+    Export:
+      Name: !Sub '${StaticStackName}-SGId'
+  DatabaseHost:
+    Description: Host Address of the Database
+    Value: !GetAtt Database.Endpoint.Address
+    Export:
+      Name: !Sub '${StaticStackName}-db-host'
+  DatabasePort:
+    Description: Port of the Database
+    Value: !GetAtt Database.Endpoint.Port
+    Export:
+      Name: !Sub '${StaticStackName}-db-port'
