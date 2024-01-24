@@ -22,9 +22,6 @@ Parameters:
   SubnetC:
     Type: String
     Default: subnet-07b0e79f4d9bbf9d0
-  DomainName:
-    Type: String
-    Default: testbed.ga4gh.org
   DBHost:
     Type: String
     Default: dev-ga4gh-testbed-database-database-bqdkifegcrpe.c0q4keadjybw.us-east-2.rds.amazonaws.com
@@ -165,7 +162,7 @@ Resources:
             - Name: DBUser
               Value: !Ref DBUser
             - Name: DBPass
-              Value: '{{resolve:secretsmanager:GA4GHTestbedRDSPassword:SecretString}}'
+              Value: !Ref DBPass
             - Name: USESSL
               Value: 'false'
           PortMappings:

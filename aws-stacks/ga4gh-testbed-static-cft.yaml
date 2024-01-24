@@ -11,15 +11,6 @@ Parameters:
   ParamUsername:
     Type: String
     Default: testbed_writer
-  SubnetA:
-    Type: String
-    Default: subnet-0be7a1fb3a96191b4
-  SubnetB:
-    Type: String
-    Default: subnet-0c465ec61b98bffac
-  SubnetC:
-    Type: String
-    Default: subnet-07b0e79f4d9bbf9d0
 
 Resources:
 
@@ -45,19 +36,6 @@ Resources:
           FromPort: 5432
           ToPort: 5432
           CidrIp: 0.0.0.0/0
-
-  ApiSecret:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Name: GA4GHTestbedApiSecret
-      Description: Client secret for GA4GH Testbed service
-      GenerateSecretString:
-        ExcludeLowercase: false
-        ExcludeNumbers: false
-        ExcludePunctuation: true
-        ExcludeUppercase: false
-        IncludeSpace: false
-        PasswordLength: 64
 
   DBPassword:
     Type: AWS::SecretsManager::Secret
