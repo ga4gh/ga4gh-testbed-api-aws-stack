@@ -4,7 +4,7 @@ Description: Template for creating testbed database instance
 Parameters:
   StaticStackName:
     Type: String
-    Default: dev-ga4gh-testbed-database
+    Default: dev-ga4gh-testbed-static
   ParamDBName:
     Type: String
     Default: testbed_db

@@ -1,6 +1,10 @@
 AWSTemplateFormatVersion: 2010-09-09
 Description: Template for testbed backend instance and rds connection
+
 Parameters:
+  StaticStackName:
+    Type: String
+    Default: dev-ga4gh-testbed-static
   HostPort:
     Type: String
     Default: 4500
@@ -51,9 +55,6 @@ Parameters:
   ExecutionRole:
     Type: String
     Default: arn:aws:iam::282236276875:role/ECSFargateExecutionRole-TT
-  SecurityGroupId:
-    Type: String
-    Default: sg-036fa481aa113d84d
 
 Resources:
 
@@ -67,7 +68,8 @@ Resources:
         - Ref: SubnetC
       Type: application
       SecurityGroups:
-      - !Ref SecurityGroupId
+        - Fn::ImportValue:
+            !Sub "${StaticStackName}-SGId"
 
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
@@ -86,6 +88,10 @@ Resources:
 
   ALBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
+    DependsOn: [
+      ALBBalancer,
+      ALBTargetGroup
+    ]
     Properties:
       DefaultActions:
         - TargetGroupArn:
@@ -104,7 +110,12 @@ Resources:
 
   ECSService:
     Type: AWS::ECS::Service
-    DependsOn: ALBListener
+    DependsOn: [
+      ECSCluster,
+      ECSTaskDefinition,
+      ALBListener,
+      ALBTargetGroup
+    ]
     Properties:
       Cluster:
         Ref: ECSCluster
@@ -115,7 +126,8 @@ Resources:
         AwsvpcConfiguration:
           AssignPublicIp: ENABLED
           SecurityGroups:
-          - !Ref SecurityGroupId
+            - Fn::ImportValue:
+                !Sub "${StaticStackName}-SGId"
           Subnets:
             - Ref: SubnetA
             - Ref: SubnetB
